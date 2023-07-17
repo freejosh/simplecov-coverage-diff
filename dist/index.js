@@ -658,6 +658,41 @@ function formatDiff(diff) {
         formatDiffItem(diff.branches)
     ];
 }
+function createOrUpdateComment(commentId, githubClient, repoOwner, repoName, messageToPost, prNumber) {
+    return __awaiter(this, void 0, void 0, function* () {
+        if (commentId) {
+            yield githubClient.issues.updateComment({
+                owner: repoOwner,
+                repo: repoName,
+                comment_id: commentId,
+                body: messageToPost
+            });
+        }
+        else {
+            yield githubClient.issues.createComment({
+                repo: repoName,
+                owner: repoOwner,
+                body: messageToPost,
+                issue_number: prNumber
+            });
+        }
+    });
+}
+function findComment(githubClient, repoOwner, repoName, prNumber, identifier) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const comments = yield githubClient.issues.listComments({
+            owner: repoOwner,
+            repo: repoName,
+            issue_number: prNumber
+        });
+        for (const comment of comments.data) {
+            if (comment.body.startsWith(identifier)) {
+                return comment.id;
+            }
+        }
+        return 0;
+    });
+}
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -690,25 +725,31 @@ function run() {
                     ...diff.map(formatDiff)
                 ]);
             }
-            const message = `## Coverage difference
+            const commentIdentifier = `<!-- simplecov-diff-comment -->`;
+            const message = `${commentIdentifier}## Coverage difference
 ${content}
 `;
+            core.info(`message will be ${message}`);
             /**
              * Publish a comment in the PR with the diff result.
              */
             const octokit = github.getOctokit(core.getInput('token'));
+            const repoName = github.context.repo.repo;
+            const repoOwner = github.context.repo.owner;
             const pullRequestId = github.context.issue.number;
             if (!pullRequestId) {
                 core.warning('Cannot find the PR id.');
                 core.info(message);
                 return;
             }
-            yield octokit.issues.createComment({
-                owner: github.context.repo.owner,
-                repo: github.context.repo.repo,
-                issue_number: pullRequestId,
-                body: message
-            });
+            const reuseComment = JSON.parse(core.getInput('reuse-comment'));
+            core.info(`reusing comment? ${reuseComment ? 'true' : 'false'}`);
+            let commentId = null;
+            if (reuseComment) {
+                commentId = yield findComment(octokit, repoOwner, repoName, pullRequestId, commentIdentifier);
+            }
+            core.info(`comment id ${commentId}`);
+            yield createOrUpdateComment(commentId, octokit, repoOwner, repoName, message, pullRequestId);
         }
         catch (error) {
             core.setFailed(error.message);
@@ -6459,17 +6500,16 @@ function branchesCoverages(coverage) {
 }
 class Coverage {
     constructor(resultset) {
-      const coverages = resultset['RSpec']['coverage'];
-
-      this.files = [];
-      for (const filename of Object.keys(coverages)) {
-        const coverage = coverages[filename];
-        this.files.push({
-          filename,
-          lines: linesCoverage(coverage.lines),
-          branches: branchesCoverages(coverage.branches || {})
-        });
-      }
+        const coverages = resultset['RSpec']['coverage'];
+        this.files = [];
+        for (const filename of Object.keys(coverages)) {
+            const coverage = coverages[filename];
+            this.files.push({
+                filename,
+                lines: linesCoverage(coverage.lines),
+                branches: branchesCoverages(coverage.branches || {})
+            });
+        }
     }
     filesMap() {
         const map = new Map();
