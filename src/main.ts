@@ -170,7 +170,7 @@ async function run(): Promise<void> {
     const message = `${commentIdentifier}## Coverage difference
 ${content}
 `
-    core.info(`message will be ${message}`)
+    console.log(`message will be ${message}`)
 
     /**
      * Publish a comment in the PR with the diff result.
@@ -187,7 +187,7 @@ ${content}
     }
 
     const reuseComment = JSON.parse(core.getInput('reuse-comment'))
-    core.info(`reusing comment? ${reuseComment ? 'true' : 'false'}`)
+    console.log(`reusing comment? ${reuseComment ? 'true' : 'false'}`)
     let commentId = null
     if (reuseComment) {
       commentId = await findComment(
@@ -198,7 +198,7 @@ ${content}
         commentIdentifier
       )
     }
-    core.info(`comment id ${commentId}`)
+    console.log(`comment id ${commentId}`)
 
     await createOrUpdateComment(
       commentId,
