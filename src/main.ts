@@ -167,7 +167,8 @@ async function run(): Promise<void> {
     }
 
     const commentIdentifier = `<!-- simplecov-diff-comment -->`
-    const message = `${commentIdentifier}## Coverage difference
+    const message = `${commentIdentifier}
+## Coverage difference
 ${content}
 `
 
