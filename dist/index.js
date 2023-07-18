@@ -729,7 +729,6 @@ function run() {
             const message = `${commentIdentifier}## Coverage difference
 ${content}
 `;
-            core.info(`message will be ${message}`);
             /**
              * Publish a comment in the PR with the diff result.
              */
@@ -743,12 +742,10 @@ ${content}
                 return;
             }
             const reuseComment = JSON.parse(core.getInput('reuse-comment'));
-            core.info(`reusing comment? ${reuseComment ? 'true' : 'false'}`);
             let commentId = null;
             if (reuseComment) {
                 commentId = yield findComment(octokit, repoOwner, repoName, pullRequestId, commentIdentifier);
             }
-            core.info(`comment id ${commentId}`);
             yield createOrUpdateComment(commentId, octokit, repoOwner, repoName, message, pullRequestId);
         }
         catch (error) {
