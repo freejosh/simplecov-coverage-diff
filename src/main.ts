@@ -2,6 +2,9 @@ import * as path from 'path'
 import * as fs from 'fs'
 import * as github from '@actions/github'
 import * as core from '@actions/core'
+import {Octokit} from '@octokit/core'
+import {PaginateInterface} from '@octokit/plugin-paginate-rest'
+import {RestEndpointMethods} from '@octokit/plugin-rest-endpoint-methods/dist-types/generated/method-types'
 import markdownTable from 'markdown-table'
 import {
   ResultSet,
@@ -78,6 +81,54 @@ function formatDiff(diff: FileCoverageDiff): [string, string, string] {
   ]
 }
 
+async function createOrUpdateComment(
+  commentId: number | null,
+  githubClient: {[x: string]: any} & {[x: string]: any} & Octokit &
+    RestEndpointMethods & {paginate: PaginateInterface},
+  repoOwner: string,
+  repoName: string,
+  messageToPost: string,
+  prNumber: number
+) {
+  if (commentId) {
+    await githubClient.issues.updateComment({
+      owner: repoOwner,
+      repo: repoName,
+      comment_id: commentId,
+      body: messageToPost
+    })
+  } else {
+    await githubClient.issues.createComment({
+      repo: repoName,
+      owner: repoOwner,
+      body: messageToPost,
+      issue_number: prNumber
+    })
+  }
+}
+
+async function findComment(
+  githubClient: {[x: string]: any} & {[x: string]: any} & Octokit &
+    RestEndpointMethods & {paginate: PaginateInterface},
+  repoOwner: string,
+  repoName: string,
+  prNumber: number,
+  identifier: string
+): Promise<number> {
+  const comments = await githubClient.issues.listComments({
+    owner: repoOwner,
+    repo: repoName,
+    issue_number: prNumber
+  })
+
+  for (const comment of comments.data) {
+    if (comment.body.startsWith(identifier)) {
+      return comment.id
+    }
+  }
+  return 0
+}
+
 async function run(): Promise<void> {
   try {
     const resultsetPaths = {
@@ -115,7 +166,9 @@ async function run(): Promise<void> {
       ])
     }
 
-    const message = `## Coverage difference
+    const commentIdentifier = `<!-- simplecov-diff-comment -->`
+    const message = `${commentIdentifier}
+## Coverage difference
 ${content}
 `
 
@@ -123,6 +176,8 @@ ${content}
      * Publish a comment in the PR with the diff result.
      */
     const octokit = github.getOctokit(core.getInput('token'))
+    const repoName = github.context.repo.repo
+    const repoOwner = github.context.repo.owner
 
     const pullRequestId = github.context.issue.number
     if (!pullRequestId) {
@@ -131,12 +186,26 @@ ${content}
       return
     }
 
-    await octokit.issues.createComment({
-      owner: github.context.repo.owner,
-      repo: github.context.repo.repo,
-      issue_number: pullRequestId,
-      body: message
-    })
+    const reuseComment = JSON.parse(core.getInput('reuse-comment'))
+    let commentId = null
+    if (reuseComment) {
+      commentId = await findComment(
+        octokit,
+        repoOwner,
+        repoName,
+        pullRequestId,
+        commentIdentifier
+      )
+    }
+
+    await createOrUpdateComment(
+      commentId,
+      octokit,
+      repoOwner,
+      repoName,
+      message,
+      pullRequestId
+    )
   } catch (error) {
     core.setFailed(error.message)
   }

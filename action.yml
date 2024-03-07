@@ -11,6 +11,9 @@ inputs:
   token:
     description: 'Github generated token'
     required: true
+  reuse-comment:
+    description: 'Reuse comments'
+    default: false
 runs:
   using: 'node20'
   main: 'dist/index.js'
